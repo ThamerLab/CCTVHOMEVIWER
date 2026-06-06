@@ -1,0 +1,23 @@
+app:
+  modules: [api, rtsp, webrtc, exec, ffmpeg, mjpeg]
+
+api:
+  listen: ":1984"
+  allow_paths: ["/api", "/api/streams", "/api/webrtc", "/api/frame.jpeg"]
+
+rtsp:
+  listen: ""
+
+exec:
+  allow_paths: [ffmpeg]
+
+webrtc:
+  listen: ":8555"
+
+streams:
+  camera1: "${CAMERA_1_URL}"
+  camera2: "${CAMERA_2_URL}"
+  camera3: "${CAMERA_3_URL}"
+
+log:
+  level: info
