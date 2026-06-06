@@ -1,0 +1,32 @@
+services:
+  go2rtc:
+    image: alexxit/go2rtc:1.9.14
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+    ports:
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
+    expose:
+      - "1984"
+    networks:
+      - cameras
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - go2rtc
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - cameras
+
+networks:
+  cameras:
+    driver: bridge
