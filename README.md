@@ -4,6 +4,16 @@
 
 نتائج اختبار الاختراق والإصلاحات موثقة في [PENTEST.md](PENTEST.md).
 
+## Proxmox LXC
+
+للتثبيت مباشرة داخل حاوية LXC غير مميزة وبدون Docker، شغّل الأمر التالي من Proxmox Shell كمستخدم `root`:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ThamerLab/CCTVHOMEVIWER/main/scripts/proxmox-lxc.sh)"
+```
+
+التخصيص، المنافذ، الصيانة والنسخ الاحتياطي موضحة في [LXC.md](LXC.md).
+
 ## الحماية
 
 - تسجيل دخول إلزامي للمشاهدة والإدارة ومسارات WebRTC.

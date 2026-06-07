@@ -2,3 +2,5 @@
 *.log
 app/data/
 .tmp/
+.tools/
+.publish/
