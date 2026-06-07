@@ -1,6 +1,8 @@
 import http from "node:http";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import {
   createCipheriv,
   createDecipheriv,
@@ -28,6 +30,7 @@ const secureCookies = process.env.SECURE_COOKIES === "true";
 const adminUsername = normalizeUsername(process.env.ADMIN_USERNAME || "admin");
 const encryptionSecret = process.env.DATA_ENCRYPTION_KEY || "";
 const encryptionKey = createHash("sha256").update(encryptionSecret).digest();
+const allowPublicCameraHosts = process.env.ALLOW_PUBLIC_CAMERA_HOSTS === "true";
 const allowedProtocols = new Set(["rtsp:", "rtsps:", "http:", "https:", "onvif:", "homekit:", "tapo:"]);
 
 if (encryptionSecret.length < 32) {
@@ -58,6 +61,12 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+server.headersTimeout = 10_000;
+server.requestTimeout = 15_000;
+server.keepAliveTimeout = 5_000;
+server.maxHeadersCount = 100;
+server.maxRequestsPerSocket = 1_000;
+
 server.listen(port, "0.0.0.0", () => {
   console.log(`CCTV app listening on ${port}`);
 });
@@ -77,7 +86,7 @@ setInterval(() => {
 async function handleApi(req, res) {
   if (req.url === "/api/login" && req.method === "POST") return login(req, res);
   if (req.url === "/api/auth/check" && req.method === "GET") {
-    return getSession(req) ? res.writeHead(204).end() : res.writeHead(401).end();
+    return authorizeProxyRequest(req, res);
   }
 
   const session = getSession(req);
@@ -155,10 +164,23 @@ async function login(req, res) {
   return sendJson(res, 200, { ok: true });
 }
 
+async function authorizeProxyRequest(req, res) {
+  if (!getSession(req)) return res.writeHead(401).end();
+  const originalUri = String(req.headers["x-original-uri"] || "");
+  const target = new URL(originalUri, "http://internal");
+  if (target.pathname === "/go2rtc/api/ws") {
+    const source = target.searchParams.get("src") || "";
+    if (!/^cam_[a-f0-9]{32}$/.test(source)) return res.writeHead(403).end();
+    const cameras = await readCameras();
+    if (!cameras.some((camera) => camera.id === source)) return res.writeHead(403).end();
+  }
+  return res.writeHead(204).end();
+}
+
 async function createCamera(req, res) {
   const body = await readJson(req);
   const name = validateName(body.name);
-  const url = validateStreamUrl(body.url);
+  const url = await validateStreamUrl(body.url);
   const camera = {
     id: `cam_${randomUUID().replaceAll("-", "")}`,
     name,
@@ -180,7 +202,7 @@ async function updateCamera(req, res, id) {
 
   camera.name = validateName(body.name);
   if (body.url) {
-    const url = validateStreamUrl(body.url);
+    const url = await validateStreamUrl(body.url);
     await setGo2rtcStream(camera.id, url);
     camera.source = encrypt(url);
   }
@@ -403,7 +425,7 @@ function validateName(value) {
   return name;
 }
 
-function validateStreamUrl(value) {
+async function validateStreamUrl(value) {
   if (typeof value !== "string" || value.length < 8 || value.length > 2048) {
     throw httpError(400, "رابط البث غير صالح");
   }
@@ -420,7 +442,36 @@ function validateStreamUrl(value) {
   if (forbiddenHosts.has(hostname) || hostname.startsWith("127.")) {
     throw httpError(400, "عنوان الكاميرا غير مسموح");
   }
+  if (!allowPublicCameraHosts) {
+    let addresses;
+    try {
+      addresses = isIP(hostname)
+        ? [hostname]
+        : (await lookup(hostname, { all: true })).map((entry) => entry.address);
+    } catch {
+      throw httpError(400, "تعذر التحقق من عنوان الكاميرا");
+    }
+    if (!addresses.length || addresses.some((address) => !isPrivateAddress(address))) {
+      throw httpError(400, "يُسمح افتراضيًا بعناوين الشبكة الخاصة فقط");
+    }
+  }
   return value;
+}
+
+function isPrivateAddress(address) {
+  const value = address.toLowerCase().split("%")[0];
+  if (value.startsWith("::ffff:")) return isPrivateAddress(value.slice(7));
+  if (isIP(value) === 4) {
+    const [a, b] = value.split(".").map(Number);
+    return a === 10
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (isIP(value) === 6) {
+    return value.startsWith("fc") || value.startsWith("fd") || /^fe[89ab]/.test(value);
+  }
+  return false;
 }
 
 function setSessionCookie(res, id) {

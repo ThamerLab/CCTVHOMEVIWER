@@ -1,9 +1,9 @@
 app:
-  modules: [api, rtsp, webrtc, exec, ffmpeg, mjpeg]
+  modules: [api, ws, rtsp, webrtc, exec, ffmpeg, mjpeg]
 
 api:
   listen: ":1984"
-  allow_paths: ["/api", "/api/streams", "/api/webrtc", "/api/frame.jpeg"]
+  allow_paths: ["/", "/api/streams", "/api/ws"]
 
 rtsp:
   listen: ""
