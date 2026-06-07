@@ -15,9 +15,6 @@ webrtc:
   listen: ":8555"
 
 streams:
-  camera1: "${CAMERA_1_URL}"
-  camera2: "${CAMERA_2_URL}"
-  camera3: "${CAMERA_3_URL}"
 
 log:
   level: info
