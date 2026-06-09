@@ -114,7 +114,6 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictNamespaces=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 

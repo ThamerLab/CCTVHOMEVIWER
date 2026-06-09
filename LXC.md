@@ -77,6 +77,14 @@ systemctl status cctv-home-viewer go2rtc nginx
 systemctl restart nginx
 ```
 
+إذا ظهر `502 Bad Gateway` في تثبيت قديم، أزل قيد الذاكرة غير المتوافق مع go2rtc:
+
+```bash
+sed -i '/^MemoryDenyWriteExecute=true$/d' /etc/systemd/system/go2rtc.service
+systemctl daemon-reload
+systemctl restart go2rtc cctv-home-viewer
+```
+
 بيانات الكاميرات والحساب محفوظة في:
 
 ```text
