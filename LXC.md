@@ -71,6 +71,12 @@ journalctl -u go2rtc -f
 systemctl status cctv-home-viewer go2rtc nginx
 ```
 
+إذا ظهرت صفحة `Welcome to nginx` بعد التثبيت، أعد تحميل إعداد الموقع:
+
+```bash
+systemctl restart nginx
+```
+
 بيانات الكاميرات والحساب محفوظة في:
 
 ```text

@@ -228,9 +228,11 @@ chmod 0755 /usr/local/bin/cctv-home-viewer-update
 
 nginx -t
 systemctl daemon-reload
-systemctl enable --now go2rtc cctv-home-viewer nginx
+systemctl enable go2rtc cctv-home-viewer nginx
+systemctl restart go2rtc cctv-home-viewer nginx
 sleep 2
 curl -fsS http://127.0.0.1:3000/health >/dev/null
+curl -fsS http://127.0.0.1/ | grep -Fq "CCTV HOME VIEWER"
 
 # ADMIN_PASSWORD is only required to initialize auth.json.
 sed -i '/^ADMIN_PASSWORD=/d' "$ENV_FILE"
