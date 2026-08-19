@@ -1,22 +1,67 @@
 const grid = document.querySelector("#camera-grid");
 const emptyState = document.querySelector("#empty-state");
+let cameraCount = 0;
+let resizeTimer;
 
 loadCameras();
+
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => updateGridLayout(cameraCount), 120);
+}, { passive: true });
 
 async function loadCameras() {
   try {
     const cameras = await apiRequest("/api/cameras");
+    cameraCount = cameras.length;
     grid.replaceChildren();
     emptyState.hidden = cameras.length !== 0;
     grid.hidden = cameras.length === 0;
-    grid.style.setProperty("--camera-count", cameras.length);
 
     for (const camera of cameras) {
       grid.append(createCameraCard(camera));
     }
+
+    requestAnimationFrame(() => updateGridLayout(cameras.length));
   } catch (error) {
     grid.textContent = error.message;
   }
+}
+
+function updateGridLayout(count) {
+  cameraCount = count;
+  grid.dataset.cameraCount = String(count);
+
+  if (!count) return;
+
+  if (window.matchMedia("(max-width: 700px)").matches) {
+    grid.dataset.layout = "mobile";
+    grid.style.removeProperty("--grid-columns");
+    grid.style.removeProperty("--grid-rows");
+    return;
+  }
+
+  const width = Math.max(grid.clientWidth, 1);
+  const height = Math.max(grid.clientHeight, 1);
+  const targetRatio = 16 / 9;
+  let best = { columns: 1, rows: count, score: Number.POSITIVE_INFINITY };
+
+  for (let columns = 1; columns <= count; columns += 1) {
+    const rows = Math.ceil(count / columns);
+    const cellRatio = (width / columns) / (height / rows);
+    const ratioPenalty = Math.abs(Math.log(cellRatio / targetRatio));
+    const emptySlots = (columns * rows) - count;
+    const emptyPenalty = emptySlots * 0.08;
+    const score = ratioPenalty + emptyPenalty;
+
+    if (score < best.score) {
+      best = { columns, rows, score };
+    }
+  }
+
+  grid.style.setProperty("--grid-columns", best.columns);
+  grid.style.setProperty("--grid-rows", best.rows);
+  grid.dataset.layout = `${best.columns}x${best.rows}`;
 }
 
 function createCameraCard(camera) {
