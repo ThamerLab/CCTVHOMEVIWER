@@ -242,7 +242,7 @@ function createStreamMonitor(camera, frame, offline, player) {
   let retries = 0;
   let loadStartedAt = 0;
   let lastProgressAt = 0;
-  let lastVideoTime = -1;
+  let lastVideoTime = null;
   let onlineConfirmed = false;
   let offlineActive = false;
 
@@ -259,7 +259,7 @@ function createStreamMonitor(camera, frame, offline, player) {
 
     loadStartedAt = Date.now();
     lastProgressAt = loadStartedAt;
-    lastVideoTime = -1;
+    lastVideoTime = null;
     onlineConfirmed = false;
 
     frame.src = `${baseSrc}&_=${Date.now()}`;
@@ -284,8 +284,14 @@ function createStreamMonitor(camera, frame, offline, player) {
     if (video) {
       const currentTime = Number(video.currentTime) || 0;
       const hasVideoData = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
-      const progressed = currentTime > lastVideoTime + 0.05;
 
+      if (lastVideoTime === null) {
+        lastVideoTime = currentTime;
+        if (hasVideoData && currentTime > 0) lastProgressAt = now;
+        return;
+      }
+
+      const progressed = currentTime > lastVideoTime + 0.05;
       if (hasVideoData && progressed) {
         lastVideoTime = currentTime;
         lastProgressAt = now;
