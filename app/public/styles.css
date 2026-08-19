@@ -147,6 +147,13 @@ input:focus {
   padding: 9px 12px;
 }
 
+.tv-mode-button[aria-pressed="true"] {
+  border-color: #4bc895;
+  color: #07120e;
+  background: var(--accent);
+  font-weight: 800;
+}
+
 .danger-button {
   border-color: rgba(255, 107, 120, 0.45);
   color: #ff9ba4;
@@ -198,6 +205,34 @@ nav,
   overflow: hidden;
 }
 
+.viewer-page.tv-mode {
+  background: #000;
+}
+
+.viewer-page.tv-mode .viewer-toolbar {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  right: 0;
+  left: 0;
+  opacity: 0;
+  transform: translateY(-105%);
+  pointer-events: none;
+  background: rgba(8, 11, 17, 0.94);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.viewer-page.tv-mode.tv-controls-visible .viewer-toolbar {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.viewer-page.tv-mode.tv-controls-hidden {
+  cursor: none;
+}
+
 .camera-grid {
   --grid-columns: 1;
   --grid-rows: 1;
@@ -209,6 +244,12 @@ nav,
   gap: 2px;
   overflow: hidden;
   background: #28313c;
+}
+
+.viewer-page.tv-mode .camera-grid {
+  height: 100vh;
+  padding: 0;
+  gap: 2px;
 }
 
 .camera-card {
@@ -247,6 +288,12 @@ nav,
   border-radius: 11px;
   background: rgba(8, 12, 18, 0.72);
   backdrop-filter: blur(10px);
+  transition: opacity 180ms ease;
+}
+
+.viewer-page.tv-mode:not(.tv-controls-visible) .camera-overlay {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .camera-overlay h2 {
@@ -370,7 +417,7 @@ dialog form {
 }
 
 @media (max-width: 700px) {
-  .viewer-page {
+  .viewer-page:not(.tv-mode) {
     height: auto;
     min-height: 100vh;
     overflow: auto;
@@ -386,7 +433,7 @@ dialog form {
     font-size: 1rem;
   }
 
-  .camera-grid {
+  .viewer-page:not(.tv-mode) .camera-grid {
     height: auto;
     min-height: calc(100vh - 76px);
     padding: 8px;
@@ -397,7 +444,7 @@ dialog form {
     background: #080b11;
   }
 
-  .camera-card {
+  .viewer-page:not(.tv-mode) .camera-card {
     flex: 0 0 auto;
     width: 100%;
     height: auto;
@@ -406,7 +453,7 @@ dialog form {
     border-radius: 12px;
   }
 
-  .camera-grid[data-camera-count="3"][data-layout="mobile"] .camera-card:last-child {
+  .viewer-page:not(.tv-mode) .camera-grid[data-camera-count="3"][data-layout="mobile"] .camera-card:last-child {
     width: 100%;
   }
 
