@@ -1,14 +1,106 @@
 const grid = document.querySelector("#camera-grid");
 const emptyState = document.querySelector("#empty-state");
+const tvModeButton = document.querySelector("#tv-mode-button");
 let cameraCount = 0;
 let resizeTimer;
+let controlsTimer;
+let tvModeActive = false;
 
 loadCameras();
+
+const initialUrl = new URL(location.href);
+if (initialUrl.searchParams.get("tv") === "1") {
+  setTvMode(true, { updateUrl: false, requestFullscreen: false });
+}
 
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => updateGridLayout(cameraCount), 120);
 }, { passive: true });
+
+document.addEventListener("fullscreenchange", () => {
+  requestAnimationFrame(() => updateGridLayout(cameraCount));
+  if (tvModeActive) showTvControls();
+});
+
+for (const eventName of ["mousemove", "pointerdown", "touchstart"]) {
+  document.addEventListener(eventName, () => showTvControls(), { passive: true });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key.toLowerCase() === "t" && !isTypingTarget(event.target)) {
+    event.preventDefault();
+    void toggleTvMode();
+    return;
+  }
+  showTvControls();
+});
+
+tvModeButton.addEventListener("click", () => {
+  void toggleTvMode();
+});
+
+async function toggleTvMode() {
+  if (tvModeActive) {
+    await setTvMode(false);
+  } else {
+    await setTvMode(true, { requestFullscreen: true });
+  }
+}
+
+async function setTvMode(active, options = {}) {
+  const { updateUrl = true, requestFullscreen = false } = options;
+  tvModeActive = active;
+  document.body.classList.toggle("tv-mode", active);
+  tvModeButton.setAttribute("aria-pressed", String(active));
+  tvModeButton.textContent = active ? "خروج من وضع التلفزيون" : "وضع التلفزيون";
+
+  if (updateUrl) {
+    const url = new URL(location.href);
+    if (active) url.searchParams.set("tv", "1");
+    else url.searchParams.delete("tv");
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  clearTimeout(controlsTimer);
+
+  if (active) {
+    showTvControls();
+    if (requestFullscreen && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch {
+        // Some TV browsers block the Fullscreen API. TV layout still works without it.
+      }
+    }
+  } else {
+    document.body.classList.remove("tv-controls-visible", "tv-controls-hidden");
+    if (document.fullscreenElement && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // Ignore browsers that do not allow programmatic fullscreen exit.
+      }
+    }
+  }
+
+  requestAnimationFrame(() => updateGridLayout(cameraCount));
+}
+
+function showTvControls() {
+  if (!tvModeActive) return;
+  document.body.classList.add("tv-controls-visible");
+  document.body.classList.remove("tv-controls-hidden");
+  clearTimeout(controlsTimer);
+  controlsTimer = setTimeout(() => {
+    document.body.classList.remove("tv-controls-visible");
+    document.body.classList.add("tv-controls-hidden");
+  }, 3500);
+}
+
+function isTypingTarget(target) {
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+}
 
 async function loadCameras() {
   try {
@@ -34,7 +126,7 @@ function updateGridLayout(count) {
 
   if (!count) return;
 
-  if (window.matchMedia("(max-width: 700px)").matches) {
+  if (window.matchMedia("(max-width: 700px)").matches && !tvModeActive) {
     grid.dataset.layout = "mobile";
     grid.style.removeProperty("--grid-columns");
     grid.style.removeProperty("--grid-rows");
