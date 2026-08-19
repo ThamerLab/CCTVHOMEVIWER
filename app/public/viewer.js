@@ -1,6 +1,12 @@
 const grid = document.querySelector("#camera-grid");
 const emptyState = document.querySelector("#empty-state");
 const tvModeButton = document.querySelector("#tv-mode-button");
+
+const STREAM_MONITOR_INTERVAL_MS = 3000;
+const STREAM_STARTUP_GRACE_MS = 12000;
+const STREAM_STALL_MS = 10000;
+const STREAM_MAX_RETRIES = 5;
+
 let cameraCount = 0;
 let resizeTimer;
 let controlsTimer;
@@ -185,11 +191,37 @@ function createCameraCard(camera) {
   const frame = document.createElement("iframe");
   frame.title = camera.name;
   frame.allow = "autoplay; fullscreen";
-  frame.src = `/go2rtc/stream.html?src=${encodeURIComponent(camera.id)}&mode=webrtc&background=true`;
+
+  const offline = document.createElement("section");
+  offline.className = "auth-card";
+  offline.hidden = true;
+  offline.setAttribute("role", "alert");
+
+  const offlineTitle = document.createElement("h2");
+  offlineTitle.className = "error";
+  offlineTitle.textContent = "لا يوجد بث";
+
+  const offlineText = document.createElement("p");
+  offlineText.className = "error";
+  offlineText.textContent = "البث لا يعمل بعد 5 محاولات إعادة اتصال.";
+
+  const manualRetry = document.createElement("button");
+  manualRetry.className = "danger-button";
+  manualRetry.type = "button";
+  manualRetry.textContent = "إعادة المحاولة";
+
+  offline.append(offlineTitle, offlineText, manualRetry);
+
+  const monitor = createStreamMonitor(camera, frame, offline, player);
 
   reload.addEventListener("click", () => {
-    frame.src = frame.src;
+    monitor.retryNow({ resetFailures: true });
   });
+
+  manualRetry.addEventListener("click", () => {
+    monitor.retryNow({ resetFailures: true });
+  });
+
   fullscreen.addEventListener("click", async () => {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await player.requestFullscreen();
@@ -199,5 +231,105 @@ function createCameraCard(camera) {
   overlay.append(name, actions);
   player.append(frame);
   card.append(overlay, player);
+
+  monitor.start();
   return card;
+}
+
+function createStreamMonitor(camera, frame, offline, player) {
+  const baseSrc = `/go2rtc/stream.html?src=${encodeURIComponent(camera.id)}&mode=webrtc&background=true`;
+  let monitorTimer;
+  let retries = 0;
+  let loadStartedAt = 0;
+  let lastProgressAt = 0;
+  let lastVideoTime = -1;
+  let onlineConfirmed = false;
+  let offlineActive = false;
+
+  function start() {
+    loadStream();
+    clearInterval(monitorTimer);
+    monitorTimer = setInterval(checkStream, STREAM_MONITOR_INTERVAL_MS);
+  }
+
+  function loadStream() {
+    offlineActive = false;
+    offline.hidden = true;
+    if (frame.parentNode !== player) player.replaceChildren(frame);
+
+    loadStartedAt = Date.now();
+    lastProgressAt = loadStartedAt;
+    lastVideoTime = -1;
+    onlineConfirmed = false;
+
+    frame.src = `${baseSrc}&_=${Date.now()}`;
+  }
+
+  function findVideo() {
+    try {
+      const documentRef = frame.contentDocument;
+      if (!documentRef) return null;
+      return documentRef.querySelector("video-stream video, video");
+    } catch {
+      return null;
+    }
+  }
+
+  function checkStream() {
+    if (document.hidden || offlineActive) return;
+
+    const now = Date.now();
+    const video = findVideo();
+
+    if (video) {
+      const currentTime = Number(video.currentTime) || 0;
+      const hasVideoData = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+      const progressed = currentTime > lastVideoTime + 0.05;
+
+      if (hasVideoData && progressed) {
+        lastVideoTime = currentTime;
+        lastProgressAt = now;
+
+        if (!onlineConfirmed) {
+          onlineConfirmed = true;
+          retries = 0;
+        }
+        return;
+      }
+
+      if (currentTime > lastVideoTime) {
+        lastVideoTime = currentTime;
+        lastProgressAt = now;
+      }
+    }
+
+    const graceElapsed = now - loadStartedAt >= STREAM_STARTUP_GRACE_MS;
+    const stalled = now - lastProgressAt >= STREAM_STALL_MS;
+
+    if (graceElapsed && stalled) handleFailure();
+  }
+
+  function handleFailure() {
+    if (retries >= STREAM_MAX_RETRIES) {
+      showOffline();
+      return;
+    }
+
+    retries += 1;
+    loadStream();
+  }
+
+  function showOffline() {
+    offlineActive = true;
+    frame.removeAttribute("src");
+    offline.hidden = false;
+    player.replaceChildren(offline);
+  }
+
+  function retryNow({ resetFailures = false } = {}) {
+    if (resetFailures) retries = 0;
+    loadStream();
+  }
+
+  return { start, retryNow };
 }
