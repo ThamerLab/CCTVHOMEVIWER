@@ -4,6 +4,8 @@ set -Eeuo pipefail
 REPO_URL="https://github.com/ThamerLab/CCTVHOMEVIWER.git"
 APP_DIR="/opt/cctv-home-viewer"
 DATA_DIR="/var/lib/cctv-home-viewer"
+GO2RTC_CONFIG_DIR="/var/lib/go2rtc-cctv"
+GO2RTC_CONFIG_FILE="${GO2RTC_CONFIG_DIR}/go2rtc.yaml"
 ENV_FILE="/etc/cctv-home-viewer.env"
 BOOTSTRAP_ENV="/root/.cctv-install.env"
 GO2RTC_VERSION="1.9.14"
@@ -47,6 +49,7 @@ fi
 rm -rf "$APP_DIR"
 git clone --depth 1 "$REPO_URL" "$APP_DIR"
 install -d -o cctv -g cctv -m 700 "$DATA_DIR"
+install -d -o cctv -g go2rtc -m 2750 "$GO2RTC_CONFIG_DIR"
 rm -rf "$APP_DIR/app/data"
 ln -s "$DATA_DIR" "$APP_DIR/app/data"
 chown -R root:root "$APP_DIR"
@@ -70,7 +73,7 @@ esac
 curl -fsSL "https://github.com/AlexxIT/go2rtc/releases/download/v${GO2RTC_VERSION}/go2rtc_linux_${go2rtc_arch}" -o /usr/local/bin/go2rtc
 echo "${go2rtc_sha256}  /usr/local/bin/go2rtc" | sha256sum -c -
 chmod 0755 /usr/local/bin/go2rtc
-install -o root -g go2rtc -m 0640 "$APP_DIR/go2rtc.yaml" /etc/go2rtc.yaml
+install -o cctv -g go2rtc -m 0640 "$APP_DIR/go2rtc.yaml" "$GO2RTC_CONFIG_FILE"
 
 install -o root -g cctv -m 0640 /dev/null "$ENV_FILE"
 systemd_quote() {
@@ -87,10 +90,11 @@ SECURE_COOKIES=false
 SESSION_IDLE_MINUTES=30
 SESSION_ABSOLUTE_HOURS=12
 GO2RTC_URL=http://127.0.0.1:1984
+GO2RTC_CONFIG_PATH=${GO2RTC_CONFIG_FILE}
 ALLOW_PUBLIC_CAMERA_HOSTS=false
 EOF
 
-cat >/etc/systemd/system/go2rtc.service <<'EOF'
+cat >/etc/systemd/system/go2rtc.service <<EOF
 [Unit]
 Description=go2rtc WebRTC camera gateway
 After=network-online.target
@@ -100,7 +104,7 @@ Wants=network-online.target
 Type=simple
 User=go2rtc
 Group=go2rtc
-ExecStart=/usr/local/bin/go2rtc -config /etc/go2rtc.yaml
+ExecStart=/usr/local/bin/go2rtc -config ${GO2RTC_CONFIG_FILE}
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
@@ -119,6 +123,27 @@ AmbientCapabilities=
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+cat >/etc/systemd/system/go2rtc-config.path <<EOF
+[Unit]
+Description=Watch CCTV HomeKit go2rtc configuration
+
+[Path]
+PathChanged=${GO2RTC_CONFIG_FILE}
+Unit=go2rtc-config-reload.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat >/etc/systemd/system/go2rtc-config-reload.service <<'EOF'
+[Unit]
+Description=Reload go2rtc after CCTV HomeKit configuration changes
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart go2rtc.service
 EOF
 
 cat >/etc/systemd/system/cctv-home-viewer.service <<EOF
@@ -150,7 +175,7 @@ RestrictNamespaces=true
 LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
-ReadWritePaths=${DATA_DIR}
+ReadWritePaths=${DATA_DIR} ${GO2RTC_CONFIG_DIR}
 
 [Install]
 WantedBy=multi-user.target
@@ -219,16 +244,18 @@ git fetch --depth 1 origin main
 git reset --hard origin/main
 rm -rf app/data
 ln -s /var/lib/cctv-home-viewer app/data
-install -o root -g go2rtc -m 0640 go2rtc.yaml /etc/go2rtc.yaml
+install -d -o cctv -g go2rtc -m 2750 /var/lib/go2rtc-cctv
+install -o cctv -g go2rtc -m 0640 go2rtc.yaml /var/lib/go2rtc-cctv/go2rtc.yaml
 systemctl restart go2rtc cctv-home-viewer nginx
-systemctl --no-pager --full status cctv-home-viewer go2rtc nginx
+systemctl enable --now go2rtc-config.path
+systemctl --no-pager --full status cctv-home-viewer go2rtc nginx go2rtc-config.path
 EOF
 chmod 0755 /usr/local/bin/cctv-home-viewer-update
 
 nginx -t
 systemctl daemon-reload
-systemctl enable go2rtc cctv-home-viewer nginx
-systemctl restart go2rtc cctv-home-viewer nginx
+systemctl enable go2rtc cctv-home-viewer nginx go2rtc-config.path
+systemctl restart go2rtc cctv-home-viewer nginx go2rtc-config.path
 sleep 2
 curl -fsS http://127.0.0.1:3000/health >/dev/null
 curl -fsS http://127.0.0.1/ | grep -Fq "CCTV HOME VIEWER"

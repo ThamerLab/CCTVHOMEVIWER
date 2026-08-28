@@ -65,6 +65,29 @@ http://IP-OF-DOCKER-SERVER:8080
 
 بعد تسجيل الدخول افتح **لوحة التحكم** وأضف روابط الكاميرات.
 
+## Apple HomeKit
+
+تثبيت LXC يدعم تصدير الكاميرات إلى Apple HomeKit عبر go2rtc.
+
+لترقية حاوية موجودة:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ThamerLab/CCTVHOMEVIWER/main/scripts/enable-homekit-lxc.sh)"
+```
+
+1. افتح لوحة التحكم.
+2. عدّل الكاميرا أو أضف كاميرا جديدة.
+3. فعّل خيار **تفعيل الظهور في Apple HomeKit**.
+4. احفظ، ثم استخدم الـ PIN الظاهر بجانب الكاميرا داخل تطبيق Apple Home.
+
+المتطلبات:
+
+- iPhone/iPad/Apple TV/HomePod على نفس الشبكة مع الحاوية.
+- عمل mDNS/Bonjour بين جهاز Apple والحاوية.
+- كاميرات HomeKit تدعم H264 للفيديو وOPUS للصوت عبر go2rtc.
+
+لـ HomeKit Secure Video والتسجيل داخل iCloud تحتاج Apple Home Hub وخطة iCloud مناسبة. إذا كان هدفك HKSV كامل مع motion detection، Scrypted غالبًا أفضل كخدمة منفصلة.
+
 بعد نجاح التشغيل الأول وإنشاء الحساب، يمكنك حذف سطر `ADMIN_PASSWORD` من `.env`. كلمة المرور المجزأة تبقى في Docker volume، ولن يحتاج التطبيق إلى قيمة التهيئة مرة أخرى.
 
 افتراضيًا تقبل لوحة التحكم كاميرات الشبكات الخاصة فقط، مثل `192.168.x.x` و`10.x.x.x` وعناوين Tailscale. إذا كنت تحتاج مصدر بث بعنوان إنترنت عام، اضبط `ALLOW_PUBLIC_CAMERA_HOSTS=true` بعد تقييم المخاطر.

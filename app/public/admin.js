@@ -41,7 +41,12 @@ function createRow(camera) {
   const status = document.createElement("p");
   status.className = "configured-label";
   status.textContent = "الرابط محفوظ ومشفّر";
-  info.append(title, status);
+  const homekit = document.createElement("p");
+  homekit.className = camera.homekit?.enabled ? "homekit-label enabled" : "homekit-label";
+  homekit.textContent = camera.homekit?.enabled
+    ? `HomeKit مفعّل - PIN: ${formatHomeKitPin(camera.homekit.pin)}`
+    : "HomeKit غير مفعّل";
+  info.append(title, status, homekit);
 
   const actions = document.createElement("div");
   actions.className = "row-actions";
@@ -75,6 +80,7 @@ function openCameraDialog(camera = null) {
   cameraForm.elements.id.value = camera?.id || "";
   cameraForm.elements.name.value = camera?.name || "";
   cameraForm.elements.url.required = !camera;
+  cameraForm.elements.homekitEnabled.checked = Boolean(camera?.homekit?.enabled);
   document.querySelector("#camera-dialog-title").textContent = camera ? "تعديل الكاميرا" : "إضافة كاميرا";
   dialog.showModal();
 }
@@ -84,7 +90,11 @@ async function saveCamera(event) {
   cameraMessage.textContent = "";
   const data = new FormData(cameraForm);
   const id = data.get("id");
-  const payload = { name: data.get("name"), url: data.get("url") };
+  const payload = {
+    name: data.get("name"),
+    url: data.get("url"),
+    homekitEnabled: data.get("homekitEnabled") === "on",
+  };
   try {
     await apiRequest(id ? `/api/cameras/${id}` : "/api/cameras", {
       method: id ? "PUT" : "POST",
@@ -95,6 +105,12 @@ async function saveCamera(event) {
   } catch (error) {
     cameraMessage.textContent = error.message;
   }
+}
+
+function formatHomeKitPin(pin) {
+  const value = String(pin || "").replace(/\D/g, "");
+  if (value.length !== 8) return pin;
+  return `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5)}`;
 }
 
 async function changePassword(event) {

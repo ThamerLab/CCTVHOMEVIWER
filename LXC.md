@@ -60,6 +60,28 @@ http://IP-OF-LXC/
 
 إذا كان Proxmox Firewall مفعّلًا، اسمح بهذه المنافذ من الشبكات الموثوقة فقط. لا تنشرها مباشرة على الإنترنت؛ استخدم VPN وHTTPS.
 
+## HomeKit
+
+لترقية حاوية موجودة إلى دعم HomeKit، ادخل الحاوية ثم شغّل:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ThamerLab/CCTVHOMEVIWER/main/scripts/enable-homekit-lxc.sh)"
+```
+
+لتصدير كاميرا إلى Apple Home:
+
+1. افتح `http://IP-OF-LXC/admin`.
+2. أضف الكاميرا أو عدّلها.
+3. فعّل خيار **تفعيل الظهور في Apple HomeKit**.
+4. احفظ، ثم استخدم الـ PIN الظاهر بجانب الكاميرا في تطبيق Home.
+
+ملاحظات مهمة:
+
+- يجب أن يكون جهاز Apple والحاوية على نفس الشبكة أو بينهما mDNS/Bonjour يعمل.
+- go2rtc يدعم تصدير كاميرات H264 إلى HomeKit، والصوت في HomeKit يحتاج OPUS.
+- إذا كنت تريد HomeKit Secure Video مع تسجيل iCloud والتنبيهات، تحتاج Apple Home Hub. Scrypted يبقى الخيار الأقوى لـ HKSV الكامل وميزات الحركة.
+- بعد تفعيل HomeKit، التطبيق يكتب إعداد go2rtc في `/var/lib/go2rtc-cctv/go2rtc.yaml` وتعيد خدمة `go2rtc-config.path` تشغيل go2rtc تلقائيًا.
+
 ## الصيانة
 
 داخل الحاوية:
@@ -69,6 +91,7 @@ cctv-home-viewer-update
 journalctl -u cctv-home-viewer -f
 journalctl -u go2rtc -f
 systemctl status cctv-home-viewer go2rtc nginx
+systemctl status go2rtc-config.path
 ```
 
 إذا ظهرت صفحة `Welcome to nginx` بعد التثبيت، أعد تحميل إعداد الموقع:

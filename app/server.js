@@ -21,6 +21,7 @@ const dataDir = path.resolve("data");
 const authFile = path.join(dataDir, "auth.json");
 const camerasFile = path.join(dataDir, "cameras.json");
 const go2rtcBase = process.env.GO2RTC_URL || "http://go2rtc:1984";
+const go2rtcConfigPath = process.env.GO2RTC_CONFIG_PATH || "";
 const sessionCookie = "cctv_session";
 const sessions = new Map();
 const loginAttempts = new Map();
@@ -40,6 +41,7 @@ if (encryptionSecret.length < 32) {
 await fs.mkdir(dataDir, { recursive: true });
 await initializeAuth();
 await initializeCameras();
+await syncGo2rtcConfig();
 void syncAllCameras();
 
 const server = http.createServer(async (req, res) => {
@@ -185,12 +187,14 @@ async function createCamera(req, res) {
     id: `cam_${randomUUID().replaceAll("-", "")}`,
     name,
     source: encrypt(url),
+    homekit: buildHomeKitSettings(body.homekitEnabled),
     createdAt: new Date().toISOString(),
   };
   await setGo2rtcStream(camera.id, url);
   const cameras = await readCameras();
   cameras.push(camera);
   await writeCameras(cameras);
+  await syncGo2rtcConfig(cameras);
   return sendJson(res, 201, publicCamera(camera));
 }
 
@@ -201,6 +205,7 @@ async function updateCamera(req, res, id) {
   if (!camera) return sendJson(res, 404, { error: "الكاميرا غير موجودة" });
 
   camera.name = validateName(body.name);
+  camera.homekit = buildHomeKitSettings(body.homekitEnabled, camera.homekit);
   if (body.url) {
     const url = await validateStreamUrl(body.url);
     await setGo2rtcStream(camera.id, url);
@@ -208,6 +213,7 @@ async function updateCamera(req, res, id) {
   }
   camera.updatedAt = new Date().toISOString();
   await writeCameras(cameras);
+  await syncGo2rtcConfig(cameras);
   return sendJson(res, 200, publicCamera(camera));
 }
 
@@ -218,6 +224,7 @@ async function deleteCamera(res, id) {
   await deleteGo2rtcStream(id);
   cameras.splice(index, 1);
   await writeCameras(cameras);
+  await syncGo2rtcConfig(cameras);
   return sendJson(res, 200, { ok: true });
 }
 
@@ -380,10 +387,53 @@ async function writeCameras(cameras) {
   await atomicWrite(camerasFile, JSON.stringify(cameras, null, 2));
 }
 
-async function atomicWrite(file, content) {
+async function atomicWrite(file, content, mode = 0o600) {
   const temporary = `${file}.${randomUUID()}.tmp`;
-  await fs.writeFile(temporary, content, { mode: 0o600 });
+  await fs.writeFile(temporary, content, { mode });
   await fs.rename(temporary, file);
+}
+
+async function syncGo2rtcConfig(cameras = null) {
+  if (!go2rtcConfigPath) return;
+  const savedCameras = cameras || await readCameras();
+  const lines = [
+    "app:",
+    "  modules: [api, ws, rtsp, webrtc, exec, ffmpeg, mjpeg, homekit]",
+    "",
+    "api:",
+    "  listen: \":1984\"",
+    "  allow_paths: [\"/\", \"/api/streams\", \"/api/ws\"]",
+    "",
+    "rtsp:",
+    "  listen: \"\"",
+    "",
+    "exec:",
+    "  allow_paths: [ffmpeg]",
+    "",
+    "webrtc:",
+    "  listen: \":8555\"",
+    "",
+    "streams:",
+  ];
+  for (const camera of savedCameras) {
+    lines.push(`  ${camera.id}: ${yamlString(decrypt(camera.source))}`);
+  }
+  const homekitCameras = savedCameras.filter((camera) => camera.homekit?.enabled);
+  lines.push("", "homekit:");
+  if (homekitCameras.length === 0) {
+    lines.push("  # Enable HomeKit per camera from the admin page.");
+  } else {
+    for (const camera of homekitCameras) {
+      lines.push(`  ${camera.id}:`);
+      lines.push(`    pin: ${yamlString(camera.homekit.pin)}`);
+      lines.push(`    name: ${yamlString(camera.name)}`);
+      lines.push(`    device_id: ${yamlString(camera.homekit.deviceId)}`);
+      lines.push(`    device_private: ${yamlString(camera.homekit.devicePrivate)}`);
+    }
+  }
+  lines.push("", "log:", "  level: info", "");
+  await fs.mkdir(path.dirname(go2rtcConfigPath), { recursive: true });
+  await atomicWrite(go2rtcConfigPath, lines.join("\n"), 0o640);
 }
 
 async function syncAllCameras() {
@@ -415,7 +465,39 @@ async function deleteGo2rtcStream(name) {
 }
 
 function publicCamera(camera) {
-  return { id: camera.id, name: camera.name, configured: true };
+  const homekit = camera.homekit?.enabled
+    ? { enabled: true, pin: camera.homekit.pin }
+    : { enabled: false };
+  return { id: camera.id, name: camera.name, configured: true, homekit };
+}
+
+function buildHomeKitSettings(enabled, previous = null) {
+  if (!enabled) return { enabled: false };
+  return {
+    enabled: true,
+    pin: previous?.pin || generateHomeKitPin(),
+    deviceId: previous?.deviceId || randomBytes(6).toString("hex").match(/.{2}/g).join(":").toUpperCase(),
+    devicePrivate: previous?.devicePrivate || randomBytes(32).toString("hex"),
+  };
+}
+
+function generateHomeKitPin() {
+  const pin = String(randomNumber(10_000_000, 99_999_999));
+  return pin === "19550224" ? "19550225" : pin;
+}
+
+function randomNumber(min, max) {
+  const range = max - min + 1;
+  const limit = Math.floor(0x1_0000_0000 / range) * range;
+  let value;
+  do {
+    value = randomBytes(4).readUInt32BE(0);
+  } while (value >= limit);
+  return min + (value % range);
+}
+
+function yamlString(value) {
+  return JSON.stringify(String(value));
 }
 
 function validateName(value) {
