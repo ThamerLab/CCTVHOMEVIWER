@@ -456,6 +456,7 @@ async function atomicWrite(file, content, mode = 0o600) {
 async function syncGo2rtcConfig(cameras = null) {
   if (!go2rtcConfigPath) return;
   const savedCameras = cameras || await readCameras();
+  const existingPairings = await readGo2rtcHomeKitPairings();
   const lines = [
     "app:",
     "  modules: [api, ws, rtsp, webrtc, exec, ffmpeg, mjpeg, homekit]",
@@ -476,7 +477,15 @@ async function syncGo2rtcConfig(cameras = null) {
     "streams:",
   ];
   for (const camera of savedCameras) {
-    lines.push(`  ${camera.id}: ${yamlString(decrypt(camera.source))}`);
+    const source = decrypt(camera.source);
+    if (camera.homekit?.enabled) {
+      lines.push(`  ${camera.id}:`);
+      lines.push(`    - ${yamlString(source)}`);
+      lines.push(`    - ${yamlString(`ffmpeg:${camera.id}#video=h264`)}`);
+      lines.push(`    - ${yamlString(`ffmpeg:${camera.id}#audio=opus`)}`);
+    } else {
+      lines.push(`  ${camera.id}: ${yamlString(source)}`);
+    }
   }
   const homekitCameras = savedCameras.filter((camera) => camera.homekit?.enabled);
   lines.push("", "homekit:");
@@ -489,11 +498,62 @@ async function syncGo2rtcConfig(cameras = null) {
       lines.push(`    name: ${yamlString(camera.name)}`);
       lines.push(`    device_id: ${yamlString(camera.homekit.deviceId)}`);
       lines.push(`    device_private: ${yamlString(camera.homekit.devicePrivate)}`);
+      const pairings = existingPairings.get(camera.id) || [];
+      if (pairings.length) {
+        lines.push("    pairings:");
+        for (const pairing of pairings) lines.push(`      - ${yamlString(pairing)}`);
+      }
     }
   }
   lines.push("", "log:", "  level: info", "");
   await fs.mkdir(path.dirname(go2rtcConfigPath), { recursive: true });
   await atomicWrite(go2rtcConfigPath, lines.join("\n"), 0o640);
+}
+
+async function readGo2rtcHomeKitPairings() {
+  const pairings = new Map();
+  if (!go2rtcConfigPath) return pairings;
+  let content;
+  try {
+    content = await fs.readFile(go2rtcConfigPath, "utf8");
+  } catch {
+    return pairings;
+  }
+  const lines = content.split(/\r?\n/);
+  let inHomeKit = false;
+  let currentCamera = "";
+  let inPairings = false;
+  for (const line of lines) {
+    if (/^\S/.test(line)) {
+      inHomeKit = line === "homekit:";
+      currentCamera = "";
+      inPairings = false;
+      continue;
+    }
+    if (!inHomeKit) continue;
+    const cameraMatch = line.match(/^  ([a-z0-9_-]+):\s*$/);
+    if (cameraMatch) {
+      currentCamera = cameraMatch[1];
+      inPairings = false;
+      continue;
+    }
+    if (!currentCamera) continue;
+    if (/^    pairings:\s*$/.test(line)) {
+      inPairings = true;
+      continue;
+    }
+    if (inPairings) {
+      const pairingMatch = line.match(/^      -\s+(.+?)\s*$/);
+      if (pairingMatch) {
+        const values = pairings.get(currentCamera) || [];
+        values.push(parseYamlString(pairingMatch[1]));
+        pairings.set(currentCamera, values);
+        continue;
+      }
+      if (/^    \S/.test(line)) inPairings = false;
+    }
+  }
+  return pairings;
 }
 
 async function syncAllCameras() {
@@ -582,6 +642,14 @@ function randomNumber(min, max) {
 
 function yamlString(value) {
   return JSON.stringify(String(value));
+}
+
+function parseYamlString(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value.replace(/^["']|["']$/g, "");
+  }
 }
 
 function validateName(value) {
