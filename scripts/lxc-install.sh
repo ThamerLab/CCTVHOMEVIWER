@@ -154,7 +154,6 @@ cat >/etc/systemd/system/cctv-home-viewer.service <<EOF
 Description=CCTV Home Viewer
 After=network-online.target go2rtc.service
 Wants=network-online.target
-Requires=go2rtc.service
 
 [Service]
 Type=simple
