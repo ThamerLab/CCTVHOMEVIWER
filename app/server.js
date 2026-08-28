@@ -462,7 +462,7 @@ async function syncGo2rtcConfig(cameras = null) {
     "",
     "api:",
     "  listen: \":1984\"",
-    "  allow_paths: [\"/\", \"/api/streams\", \"/api/ws\", \"/api/homekit\"]",
+    "  allow_paths: [\"/\", \"/api/streams\", \"/api/ws\", \"/api/homekit\", \"/pair-setup\", \"/pair-verify\"]",
     "",
     "rtsp:",
     "  listen: \"\"",
