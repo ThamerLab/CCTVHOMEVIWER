@@ -73,7 +73,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/ThamerLab/CCTVHOMEVIWER/
 1. افتح `http://IP-OF-LXC/admin`.
 2. أضف الكاميرا أو عدّلها.
 3. فعّل خيار **تفعيل الظهور في Apple HomeKit**.
-4. احفظ، ثم استخدم الـ PIN الظاهر بجانب الكاميرا في تطبيق Home.
+4. افتح `http://IP-OF-LXC/homekit`.
+5. امسح QR الخاص بالكاميرا من تطبيق Apple Home، أو استخدم الـ PIN الظاهر بجانبها.
 
 ملاحظات مهمة:
 

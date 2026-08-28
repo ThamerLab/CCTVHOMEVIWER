@@ -16,6 +16,9 @@ trap 'echo "[ERROR] HomeKit enable failed on line $LINENO."' ERR
 cd "$APP_DIR"
 git fetch --depth 1 origin main
 git reset --hard origin/main
+cd app
+npm ci --omit=dev
+cd ..
 rm -rf app/data
 ln -s "$DATA_DIR" app/data
 

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b11">
+  <title>HomeKit | كاميرات المنزل</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="admin-page">
+  <header class="admin-header">
+    <div>
+      <p class="eyebrow">APPLE HOME</p>
+      <h1>ربط HomeKit</h1>
+    </div>
+    <nav>
+      <a class="toolbar-button" href="/">عرض الكاميرات</a>
+      <a class="toolbar-button" href="/admin">لوحة التحكم</a>
+      <button class="toolbar-button logout-button" type="button">خروج</button>
+    </nav>
+  </header>
+
+  <main class="homekit-layout">
+    <section class="panel homekit-intro">
+      <p class="eyebrow">PAIRING</p>
+      <h2>امسح الباركود من تطبيق Apple Home</h2>
+      <p class="muted">كل كاميرا مفعّلة في HomeKit لها QR وPIN مستقل. إذا كانت الكاميرا مقترنة مسبقًا، احذفها من Apple Home قبل إعادة الربط.</p>
+      <a class="primary-button inline-button" href="/admin">تفعيل HomeKit لكاميرا</a>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">CAMERAS</p>
+          <h2>باركود الكاميرات</h2>
+        </div>
+        <button id="refresh-homekit" class="toolbar-button" type="button">تحديث</button>
+      </div>
+      <div id="homekit-list" class="homekit-grid" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="/common.js" defer></script>
+  <script src="/homekit.js" defer></script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import QRCode from "qrcode";
 import {
   createCipheriv,
   createDecipheriv,
@@ -107,6 +108,9 @@ async function handleApi(req, res) {
     const cameras = await readCameras();
     return sendJson(res, 200, cameras.map(publicCamera));
   }
+  if (req.url === "/api/homekit" && req.method === "GET") {
+    return listHomeKitCameras(res);
+  }
   if (req.url === "/api/cameras" && req.method === "POST") {
     verifyMutation(req, session);
     return createCamera(req, res);
@@ -114,6 +118,12 @@ async function handleApi(req, res) {
   if (req.url === "/api/password" && req.method === "PUT") {
     verifyMutation(req, session);
     return changePassword(req, res, session);
+  }
+
+  const apiPathname = new URL(req.url, "http://local").pathname;
+  const homekitQrMatch = apiPathname.match(/^\/api\/homekit\/cameras\/([a-z0-9_-]+)\/qr\.svg$/);
+  if (homekitQrMatch && req.method === "GET") {
+    return homeKitQr(res, homekitQrMatch[1]);
   }
 
   const match = req.url.match(/^\/api\/cameras\/([a-z0-9_-]+)$/);
@@ -245,6 +255,54 @@ async function changePassword(req, res, session) {
   return sendJson(res, 200, { ok: true });
 }
 
+async function listHomeKitCameras(res) {
+  const cameras = await readCameras();
+  const result = [];
+  for (const camera of cameras) {
+    const enabled = Boolean(camera.homekit?.enabled);
+    const item = {
+      id: camera.id,
+      name: camera.name,
+      enabled,
+      pin: enabled ? formatHomeKitPin(camera.homekit.pin) : "",
+      paired: false,
+      qrAvailable: false,
+      qrUrl: enabled ? `/api/homekit/cameras/${camera.id}/qr.svg` : "",
+    };
+    if (enabled) {
+      try {
+        const info = await getGo2rtcHomeKitInfo(camera.id);
+        item.name = info.name || item.name;
+        item.paired = Number(info.paired || 0) > 0;
+        item.setupCode = info.setup_code || "";
+        item.setupId = info.setup_id || "";
+        item.setupUri = buildHomeKitSetupUri(info);
+        item.qrAvailable = Boolean(item.setupUri);
+      } catch (error) {
+        item.error = error.message;
+      }
+    }
+    result.push(item);
+  }
+  return sendJson(res, 200, result);
+}
+
+async function homeKitQr(res, id) {
+  const cameras = await readCameras();
+  const camera = cameras.find((item) => item.id === id);
+  if (!camera || !camera.homekit?.enabled) return sendJson(res, 404, { error: "HomeKit غير مفعّل لهذه الكاميرا" });
+  const info = await getGo2rtcHomeKitInfo(id);
+  const setupUri = buildHomeKitSetupUri(info);
+  if (!setupUri) return sendJson(res, 409, { error: "QR غير متاح بعد الاقتران أو قبل جاهزية go2rtc" });
+  const svg = await QRCode.toString(setupUri, {
+    errorCorrectionLevel: "quartile",
+    margin: 1,
+    type: "svg",
+    width: 320,
+  });
+  return sendSvg(res, 200, svg);
+}
+
 async function servePage(req, res) {
   const pathname = new URL(req.url, "http://local").pathname;
   const session = getSession(req);
@@ -260,10 +318,12 @@ async function servePage(req, res) {
   const routes = {
     "/": "viewer.html",
     "/admin": "admin.html",
+    "/homekit": "homekit.html",
     "/styles.css": "styles.css",
     "/common.js": "common.js",
     "/viewer.js": "viewer.js",
     "/admin.js": "admin.js",
+    "/homekit.js": "homekit.js",
     "/login.js": "login.js",
   };
   const file = routes[pathname];
@@ -402,7 +462,7 @@ async function syncGo2rtcConfig(cameras = null) {
     "",
     "api:",
     "  listen: \":1984\"",
-    "  allow_paths: [\"/\", \"/api/streams\", \"/api/ws\"]",
+    "  allow_paths: [\"/\", \"/api/streams\", \"/api/ws\", \"/api/homekit\"]",
     "",
     "rtsp:",
     "  listen: \"\"",
@@ -471,6 +531,24 @@ function publicCamera(camera) {
   return { id: camera.id, name: camera.name, configured: true, homekit };
 }
 
+async function getGo2rtcHomeKitInfo(id) {
+  const query = new URLSearchParams({ id });
+  const response = await fetch(`${go2rtcBase}/api/homekit?${query}`, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw httpError(502, "تعذر قراءة بيانات HomeKit من go2rtc");
+  return response.json();
+}
+
+function buildHomeKitSetupUri(info) {
+  const setupCode = String(info.setup_code || "").replace(/\D/g, "");
+  const setupId = String(info.setup_id || "");
+  const category = Number.parseInt(info.category_id || "17", 10);
+  if (!/^\d{8}$/.test(setupCode) || !/^[A-Z0-9]{4}$/.test(setupId) || !Number.isFinite(category)) {
+    return "";
+  }
+  const payload = (BigInt(category & 0xff) << 31n) | (2n << 27n) | BigInt(Number(setupCode) & 0x7ffffff);
+  return `X-HM://${payload.toString(36).toUpperCase().padStart(9, "0")}${setupId}`;
+}
+
 function buildHomeKitSettings(enabled, previous = null) {
   if (!enabled) return { enabled: false };
   return {
@@ -479,6 +557,12 @@ function buildHomeKitSettings(enabled, previous = null) {
     deviceId: previous?.deviceId || randomBytes(6).toString("hex").match(/.{2}/g).join(":").toUpperCase(),
     devicePrivate: previous?.devicePrivate || randomBytes(32).toString("hex"),
   };
+}
+
+function formatHomeKitPin(pin) {
+  const value = String(pin || "").replace(/\D/g, "");
+  if (value.length !== 8) return String(pin || "");
+  return `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5)}`;
 }
 
 function generateHomeKitPin() {
@@ -641,4 +725,9 @@ function sendJson(res, status, payload) {
 function sendText(res, status, text) {
   res.writeHead(status, { "Content-Type": "text/plain; charset=utf-8" });
   res.end(text);
+}
+
+function sendSvg(res, status, svg) {
+  res.writeHead(status, { "Content-Type": "image/svg+xml; charset=utf-8" });
+  res.end(svg);
 }

@@ -53,6 +53,9 @@ install -d -o cctv -g go2rtc -m 2750 "$GO2RTC_CONFIG_DIR"
 rm -rf "$APP_DIR/app/data"
 ln -s "$DATA_DIR" "$APP_DIR/app/data"
 chown -R root:root "$APP_DIR"
+cd "$APP_DIR/app"
+npm ci --omit=dev
+cd "$APP_DIR"
 
 arch="$(dpkg --print-architecture)"
 case "$arch" in
@@ -242,6 +245,9 @@ set -Eeuo pipefail
 cd /opt/cctv-home-viewer
 git fetch --depth 1 origin main
 git reset --hard origin/main
+cd app
+npm ci --omit=dev
+cd ..
 rm -rf app/data
 ln -s /var/lib/cctv-home-viewer app/data
 install -d -o cctv -g go2rtc -m 2750 /var/lib/go2rtc-cctv

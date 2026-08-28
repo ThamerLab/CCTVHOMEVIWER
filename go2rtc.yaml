@@ -3,7 +3,7 @@ app:
 
 api:
   listen: ":1984"
-  allow_paths: ["/", "/api/streams", "/api/ws"]
+  allow_paths: ["/", "/api/streams", "/api/ws", "/api/homekit"]
 
 rtsp:
   listen: ""
