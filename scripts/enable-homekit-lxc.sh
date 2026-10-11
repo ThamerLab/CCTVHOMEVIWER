@@ -15,12 +15,18 @@ trap 'echo "[ERROR] HomeKit enable failed on line $LINENO."' ERR
 
 cd "$APP_DIR"
 git fetch --depth 1 origin main
+install -d -m 0700 /var/backups/cctv-home-viewer
+backup="/var/backups/cctv-home-viewer/homekit-before-upgrade-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
+tar -czf "$backup" -C /var/lib cctv-home-viewer go2rtc-cctv
+chmod 0600 "$backup"
 git reset --hard origin/main
 cd app
 npm ci --omit=dev
 cd ..
-rm -rf app/data
-ln -s "$DATA_DIR" app/data
+if [[ ! -L app/data ]]; then
+  if [[ -e app/data ]]; then echo "Refusing to delete existing app/data" >&2; exit 1; fi
+  ln -s "$DATA_DIR" app/data
+fi
 
 if ! id cctv >/dev/null 2>&1; then
   useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin cctv
