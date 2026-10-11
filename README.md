@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🎥 CCTV Home Viewer
+<img src="docs/images/hero.svg" alt="CCTV Home Viewer — self-hosted camera dashboard (illustration)" width="100%">
+
+# CCTV Home Viewer
 
 **Private home camera dashboard · WebRTC · Proxmox LXC · Optional Apple HomeKit**
 
@@ -8,12 +10,14 @@
 
 </div>
 
-> [!WARNING]
-> Home surveillance is sensitive. **Never forward web or WebRTC media ports directly to the internet.** Use trusted LAN/VPN access. This project is community maintained and not independently penetration-tested.
+> [!NOTE]
+> The images below are **original vector illustrations**, not screenshots of real cameras or claims of tested streaming performance.
 
-لوحة خاصة لعرض وإدارة كاميرات المنزل عبر WebRTC. تدعم إضافة أي عدد من الكاميرات، تعديل أسمائها وروابطها، حذفها، وتكبير كل بث.
+<img src="docs/images/features.svg" alt="Illustrated overview of Live WebRTC, security, Apple HomeKit and Proxmox support" width="100%">
 
-نتائج اختبار الاختراق والإصلاحات موثقة في [PENTEST.md](PENTEST.md).
+## Architecture at a glance
+
+<img src="docs/images/architecture.svg" alt="Illustrated flow between IP cameras, go2rtc, Node.js/Nginx and browser" width="100%">
 
 ## Proxmox LXC
 
