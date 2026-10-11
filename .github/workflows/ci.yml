@@ -1,0 +1,46 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+      - name: Check server and frontend JavaScript
+        run: |
+          node --check app/server.js
+          for file in app/public/*.js; do node --check "$file"; done
+      - name: Check Bash syntax
+        run: bash -n scripts/*.sh
+      - name: Docker Compose syntax
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Security and regression invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          script=Path("scripts/lxc-install.sh").read_text()
+          section=script.split("cat >/usr/local/bin/cctv-home-viewer-update",1)[1]
+          assert 'tar -czf "$backup_dir/state-$stamp.tar.gz"' in section
+          assert 'if [[ ! -e /var/lib/go2rtc-cctv/go2rtc.yaml ]]' in section
+          assert 'systemctl restart cctv-home-viewer nginx' in section
+          assert 'install -o cctv -g go2rtc -m 0640 go2rtc.yaml /var/lib/go2rtc-cctv/go2rtc.yaml' in section
+          assert "rm -rf app/data" not in section
+          assert 'install -o cctv -g go2rtc -m 0640 go2rtc.yaml /var/lib/go2rtc-cctv/go2rtc.yaml\nsystemctl restart go2rtc' not in section
+          homekit=Path("scripts/enable-homekit-lxc.sh").read_text()
+          assert "homekit-before-upgrade-" in homekit
+          assert "rm -rf app/data" not in homekit
+          print("LXC update data-preservation regression checks passed")
+          PY
