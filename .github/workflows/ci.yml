@@ -22,7 +22,8 @@ jobs:
           node --check app/server.js
           for file in app/public/*.js; do node --check "$file"; done
       - name: Check Bash syntax
-        run: bash -n scripts/*.sh
+        run: |
+          for script in scripts/*.sh; do bash -n "$script"; done
       - name: Docker Compose syntax
         run: |
           cp .env.example .env
