@@ -243,15 +243,28 @@ cat >/usr/local/bin/cctv-home-viewer-update <<'EOF'
 set -Eeuo pipefail
 cd /opt/cctv-home-viewer
 git fetch --depth 1 origin main
+# Backup persistent state independently of the application checkout.
+backup_dir="/var/backups/cctv-home-viewer"
+install -d -m 0700 "$backup_dir"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+tar -czf "$backup_dir/state-$stamp.tar.gz" -C /var/lib cctv-home-viewer go2rtc-cctv
+chmod 0600 "$backup_dir/state-$stamp.tar.gz"
 git reset --hard origin/main
 cd app
 npm ci --omit=dev
 cd ..
-rm -rf app/data
-ln -s /var/lib/cctv-home-viewer app/data
+if [[ ! -L app/data ]]; then
+  if [[ -e app/data ]]; then
+    echo "Refusing to replace non-symlink app/data; inspect before updating" >&2; exit 1
+  fi
+  ln -s /var/lib/cctv-home-viewer app/data
+fi
 install -d -o cctv -g go2rtc -m 2750 /var/lib/go2rtc-cctv
-install -o cctv -g go2rtc -m 0640 go2rtc.yaml /var/lib/go2rtc-cctv/go2rtc.yaml
-systemctl restart go2rtc cctv-home-viewer nginx
+# Preserve saved HomeKit pairings and camera streams. Do not overwrite the live config.
+if [[ ! -e /var/lib/go2rtc-cctv/go2rtc.yaml ]]; then
+  install -o cctv -g go2rtc -m 0640 go2rtc.yaml /var/lib/go2rtc-cctv/go2rtc.yaml
+fi
+systemctl restart cctv-home-viewer nginx
 systemctl enable --now go2rtc-config.path
 systemctl --no-pager --full status cctv-home-viewer go2rtc nginx go2rtc-config.path
 EOF
