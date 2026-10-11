@@ -1,4 +1,15 @@
-# CCTV Home Viewer
+<div align="center">
+
+# 🎥 CCTV Home Viewer
+
+**Private home camera dashboard · WebRTC · Proxmox LXC · Optional Apple HomeKit**
+
+[![CI](https://github.com/ThamerLab/CCTVHOMEVIWER/actions/workflows/ci.yml/badge.svg)](https://github.com/ThamerLab/CCTVHOMEVIWER/actions/workflows/ci.yml) ![Node 24](https://img.shields.io/badge/Node.js-24-339933) ![Self hosted](https://img.shields.io/badge/Self--hosted-LAN%20only-2563eb)
+
+</div>
+
+> [!WARNING]
+> Home surveillance is sensitive. **Never forward web or WebRTC media ports directly to the internet.** Use trusted LAN/VPN access. This project is community maintained and not independently penetration-tested.
 
 لوحة خاصة لعرض وإدارة كاميرات المنزل عبر WebRTC. تدعم إضافة أي عدد من الكاميرات، تعديل أسمائها وروابطها، حذفها، وتكبير كل بث.
 
@@ -128,3 +139,18 @@ docker compose down
 | `8080/tcp` | الموقع وصفحات الإدارة |
 | `8555/tcp` | وسائط WebRTC |
 | `8555/udp` | وسائط WebRTC منخفضة التأخير |
+
+## تحسينات الأمان والتحديث (أكتوبر 2026)
+
+- تحديث LXC ينشئ نسخة احتياطية قبل استبدال الكود في `/var/backups/cctv-home-viewer/`، ويحافظ على إعدادات go2rtc الحية واقترانات HomeKit بدل استبدالها بالإعدادات الافتراضية.
+- ترقية HomeKit تنشئ نسخة احتياطية أيضًا وتتوقف عند وجود مجلد بيانات غير متوقع بدل حذفه.
+- إعداد Docker يدعم اختيار عنوان الاستماع بإعداد `WEB_BIND_IP` للموقع و`MEDIA_BIND_IP` لوسائط WebRTC. حدّد عنوان LAN الصحيح بدل `0.0.0.0` عند الحاجة، مع ضبط جدار ناري يسمح للأجهزة الموثوقة فقط.
+- CI يفحص صياغة JavaScript وBash وإعداد Compose وقواعد حماية بيانات التحديث. راجع [نتائج الاختبارات](https://github.com/ThamerLab/CCTVHOMEVIWER/actions).
+- راجع [SECURITY.md](SECURITY.md) و[CONTRIBUTING.md](CONTRIBUTING.md).
+
+### الاسترجاع بعد تحديث LXC
+
+قبل استرجاع البيانات، **خذ نسخة إضافية من الحالة الحالية وأوقف الخدمات**، ثم افحص محتويات الأرشيف بأمر `tar -tzf /var/backups/cctv-home-viewer/FILE.tar.gz`. الأرشيف يحتوي بيانات `cctv-home-viewer` و`go2rtc-cctv`، لكن **مفتاح التشفير** الموجود في `/etc/cctv-home-viewer.env` يحتاج نسخًا احتياطيًا مستقلًا. لا تستبدل المجلدات الحية دون التأكد من التوافق ومن سلامة النسخة الاحتياطية.
+
+> [!NOTE]
+> رسومات README المستقبلية يجب أن تكون لقطات حقيقية أو رسومات موسومة بأنها توضيحية. لا توجد صور لواجهة تشغيل حقيقية معتمدة حتى الآن. كذلك لم يُختبر تحديث هذه النسخة على كاميرات فعلية أو على Proxmox مباشر في هذه الجولة.
