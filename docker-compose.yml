@@ -12,8 +12,8 @@ services:
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
     ports:
-      - "8555:8555/tcp"
-      - "8555:8555/udp"
+      - "${MEDIA_BIND_IP:-0.0.0.0}:8555:8555/tcp"
+      - "${MEDIA_BIND_IP:-0.0.0.0}:8555:8555/udp"
     expose:
       - "1984"
     networks:
@@ -47,7 +47,7 @@ services:
       - app
       - go2rtc
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_BIND_IP:-0.0.0.0}:${WEB_PORT:-8080}:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
